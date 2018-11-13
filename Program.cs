@@ -3,24 +3,16 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 
 /*
- *  Loop:
- *  -A <- best attribute
- *  -Assign A as decision attribute for Node
- *  -For each value of A
- *      Create a descendent of node
+ * @Author: Daniel Tian (A00736794)
+ * @Date November 12, 2018
  * 
- *  -sort training examples to leaves
- *  -if examples perfectly classified STOP
- *      else iterate over leaves 
+ * AI Assignment 4 (ID3 Decision tree)
  * 
- * 
- *  S = set of training examples
- *  A = particular attribute?
- *  Gain(S,A) = Entropy (S) - average entropy over each set of examples you have over a particular value   
+ * This code was written without recursion because I felt like challenging myself, 
+ * but ended up creating really really bad code. Lesson learned for the future; apologies for this.
  * 
  * */
 
@@ -71,9 +63,7 @@ namespace AiAssignment4
         static Feature[] features;
         static Data[] dataSet;
         static Data[] testingSet;
-
         static int treeMaxDepth = 5;
-
 
         static void Main(string[] args)
         {
@@ -83,19 +73,24 @@ namespace AiAssignment4
                 List<string> trainingFileContents = new List<string>();
                 List<string> testingFileContents = new List<string>();
 
-                //ReadFile("mydata.txt", ref trainingFileContents);
-                //ReadFile("mydata_test.txt", ref testingFileContents);
-                ReadFile("train-titanic-fatalities.data", ref trainingFileContents);
-                ReadFile("train-titanic-fatalities.data", ref testingFileContents);
+                if (args.Length > 0)
+                { 
+                    ReadFile(args[0], ref trainingFileContents);
+                    ReadFile(args[1], ref testingFileContents);
+                }
+                else
+                {
+                    ReadFile("train-titanic-fatalities.data", ref trainingFileContents);
+                    ReadFile("train-titanic-fatalities.data", ref testingFileContents); //default data file if none provided
+                }
+
 
                 features = new Feature[int.Parse(trainingFileContents[2])];
                 string[] classLabels = { trainingFileContents[0], trainingFileContents[1] };
 
-                var sw = new Stopwatch();
-                sw.Start();
+                var sw = new Stopwatch(); sw.Start();
 
                 dataSet = GenerateDataSet(trainingFileContents, classLabels);
-
                 testingSet = GenerateDataSet(testingFileContents, classLabels);
 
                 int positiveCount = dataSet.Where(n => n.decision).Count();
@@ -134,37 +129,22 @@ namespace AiAssignment4
 
 
                 //  START of TREE creation
-
-
                 Node root = new Node(chosenFeature), currentNode = root;
-
                 List<Data> filteredDataSet = new List<Data>();
                 List<Node> currentLayer = null, nextLayer = new List<Node>();
                 
-
                 int currentClassificationIndex = 0;
-
                 bool isRunning = true;
 
                 while (isRunning)
                 {
-
-
                     int currentFeatureLength = (currentNode.feature.attributes == null) ? 0: currentNode.feature.attributes.Length;
 
                     for(int i = 0; i < currentFeatureLength; i++)
                     {
 
-                        if(currentNode.previousNode == null)
-                        {
-                            filteredDataSet = dataSet.Where(n => n.attributeValues[currentNode.feature.index].Equals(currentNode.feature.attributes[i])).ToList();
-                        }
-                        else
-                        {
-                            filteredDataSet = dataSet.Where(n => n.attributeValues[currentNode.previousNode.feature.index].Equals(currentNode.parentAttribute)).ToList();
-                            
-                        }
-
+                        if(currentNode.previousNode == null) filteredDataSet = dataSet.Where(n => n.attributeValues[currentNode.feature.index].Equals(currentNode.feature.attributes[i])).ToList();
+                        else filteredDataSet = dataSet.Where(n => n.attributeValues[currentNode.previousNode.feature.index].Equals(currentNode.parentAttribute)).ToList();
 
                         positiveCount = filteredDataSet.Where( n=> (n.decision) && (n.attributeValues[currentNode.feature.index].Equals(currentNode.feature.attributes[i])) ).Count();
                         negativeCount = filteredDataSet.Where(n => (!n.decision) && (n.attributeValues[currentNode.feature.index].Equals(currentNode.feature.attributes[i]))).Count();
@@ -260,14 +240,12 @@ namespace AiAssignment4
 
                     if (currentLayer == null)
                     {
-                        //currentLayer = new List<Node>(currentNode.branches);
                         currentLayer = new List<Node>(nextLayer);
                         nextLayer.Clear();
                     }
 
                     if(currentClassificationIndex < currentLayer.Count())
                     {
-                        //nextLayer.AddRange(currentNode.branches);
                         currentNode = currentLayer[currentClassificationIndex];
                         currentClassificationIndex++;
                     }
@@ -276,11 +254,8 @@ namespace AiAssignment4
                         //here check to see if every branch has reached end decision.
                         isRunning = false;
                         foreach(var node in currentLayer) if (!node.end) { isRunning = true; break; }
-                        //foreach (var node in currentNode.branches) if (!node.end) { isRunning = true; break; }
                         if (!isRunning) break;
                         //if not, keep classifying.
-
-                        //Console.WriteLine("classifying: " + currentLayer.Count());
 
                         currentClassificationIndex = 0;
                         currentLayer = new List<Node>(nextLayer);
@@ -291,105 +266,110 @@ namespace AiAssignment4
 
                 long elapsedMilliseconds = sw.ElapsedMilliseconds; sw.Stop();
 
+                Console.WriteLine("================================Decision Tree================================: \n");
+
                 PrintTree(root);
 
-                int correct = 0;
+                Console.WriteLine("\n\n================================Testing================================: \n");
+
+                int correct = 0, incorrect = 0;
                 foreach (var set in testingSet)
                 {
                     if(TraverseTree(root, set.attributeValues) == set.decision)
                     {
                         correct++;
                     }
+                    else
+                    {
+                        incorrect++;
+                    }
                 }
 
+                float incorrectFraction = ((float)incorrect /(float)testingSet.Count());
 
-                Console.WriteLine("\n\nCorrect: " + correct + " out of " + testingSet.Length);
-                Console.WriteLine("finished: " + elapsedMilliseconds);
+
+                Console.WriteLine("\nIncorrect: " + incorrect + " out of " + testingSet.Length);
+                Console.WriteLine("Fraction incorrect: " + incorrectFraction);
+                Console.WriteLine("\nProgram Finished, Time took (milliseconds): " + elapsedMilliseconds);
             }
             catch (Exception e) //exception handling out of scope
             {
-                if(e.Message != null)
-                Console.WriteLine("Invalid input file: " + e.Message);
+                Console.WriteLine("Invalid input file: ");
             }
         }
 
 
         static void PrintTree(Node tree)
         {
-            if (tree.feature.attributes == null) return;
-            
 
-            Console.WriteLine("\n" +tree.feature.featureName + ": ");
-
-            for(int i = 0; i < tree.feature.attributes.Length; i++)
+            if (tree.end)
             {
-                Console.Write(tree.feature.attributes[i]);
-                    
-                if(tree.branches[i].end) Console.Write("==>" + tree.branches[i].decision);
 
-                //if (tree.end) Console.Write("==>" + tree.decision);
+                List<string> result = new List<string>();
 
-                Console.Write("\t");
+                Node current = tree;
+                while (current.parentAttribute != null)
+                {
+                    if (current.end)
+                    {
+                        result.Add(current.decision + "");
+                        result.Add(current.parentAttribute);
+                    }
+                    else
+                    {
+                        result.Add(current.feature.featureName);
+                        result.Add(current.parentAttribute);
+                    }
+
+                    current = current.previousNode;
+                }
+
+                result.Add(current.feature.featureName);
+
+                for(int i = result.Count()-1; i >= 0; i--) if (i == 0) Console.Write(result[i]); else Console.Write(result[i] + "->");
+                Console.WriteLine();
+
+                return;
             }
-            
-            if (tree.branches == null) return;
 
-            foreach(var branch in tree.branches)
-            {
-                PrintTree(branch);
-            }
+            foreach(var branch in tree.branches) PrintTree(branch);
 
         }
 
-
-
         static bool TraverseTree(Node tree, string[] attributeValues)
         {
-
             Node currentNode = tree;
 
             while (!currentNode.end)
             {
-
                 if (currentNode.branches != null)
                 {
                     for (int i = 0; i < tree.branches.Length; i++)
                     {
-
                         if (attributeValues.Contains(currentNode.feature.attributes[i]))
                         {
 
                             currentNode = currentNode.branches[i];
                             break;
                         }
-
                     }
                 }
             }
-
-
             return currentNode.decision;
         }
 
-
-
         static float Entropy(int positiveCount, int negativeCount, int count)
         {
-
             var a = (-((float)positiveCount / (float)count) * (float)Math.Log((float)positiveCount / (float)count, 2));
             var b = ((float)negativeCount / (float)count) * (float)Math.Log((float)negativeCount / (float)count, 2);
-
             if (float.IsNaN(a)) a = 0;
             if (float.IsNaN(b)) b = 0;
-
             return a - b;
         }
 
         static Data[] GenerateDataSet(List<string> filecontents, string[] classLabels)
         {
-
             List<string> examples = new List<string>();
-
 
             for (int i = 3, k = 0; i < features.Length + 3; i++, k++)   //input file has number of features at index 2, so we start populating features array at index of 3
             {
@@ -397,7 +377,6 @@ namespace AiAssignment4
                 features[k].featureName = featureSplit[0];
                 features[k].attributes = new string[featureSplit.Length - 1];
                 features[k].index = k;
-
                 for (int j = 0; j < features[k].attributes.Length; j++) features[k].attributes[j] = featureSplit[j + 1];
             }
 
@@ -411,7 +390,6 @@ namespace AiAssignment4
                 Regex regex = new Regex("[ ]{2,}", options);
                 string temp = examples[i].Replace("\t", " ");
                 temp = regex.Replace(temp, " ");
-
                 string[] dataSplit = temp.Split(' ');
 
                 if (dataSplit[1].Equals(classLabels[0]))
@@ -424,14 +402,11 @@ namespace AiAssignment4
                 }
 
                 set[i].attributeValues = new string[features.Length];
-
                 for (int j = 2, attribIndex = 0; j < dataSplit.Length; j++, attribIndex++) set[i].attributeValues[attribIndex] = dataSplit[j];
-
             }
 
             return set;
         }
-
 
         static bool ReadFile(string fileName, ref List<string> output)
         {
@@ -453,8 +428,5 @@ namespace AiAssignment4
             }
             return true;
         }
-
-
     }
-
 }
