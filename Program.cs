@@ -70,6 +70,10 @@ namespace AiAssignment4
 
         static Feature[] features;
         static Data[] dataSet;
+        static Data[] testingSet;
+
+        static int treeMaxDepth = 5;
+
 
         static void Main(string[] args)
         {
@@ -80,54 +84,19 @@ namespace AiAssignment4
                 List<string> testingFileContents = new List<string>();
 
                 //ReadFile("mydata.txt", ref trainingFileContents);
+                //ReadFile("mydata_test.txt", ref testingFileContents);
                 ReadFile("train-titanic-fatalities.data", ref trainingFileContents);
+                ReadFile("train-titanic-fatalities.data", ref testingFileContents);
 
                 features = new Feature[int.Parse(trainingFileContents[2])];
-                List<string> examples = new List<string>();
                 string[] classLabels = { trainingFileContents[0], trainingFileContents[1] };
-
-
-                for (int i = 3, k = 0; i < features.Length + 3; i++, k++)   //input file has number of features at index 2, so we start populating features array at index of 3
-                {
-                    string[] featureSplit = trainingFileContents[i].Split(' ');
-                    features[k].featureName = featureSplit[0];
-                    features[k].attributes = new string[featureSplit.Length - 1];
-                    features[k].index = k;
-
-                    for (int j = 0; j < features[k].attributes.Length; j++) features[k].attributes[j] = featureSplit[j + 1];
-                }
-
-                int exampleCount = int.Parse(trainingFileContents[features.Length + 3]);
-                for (int i = features.Length + 4; i < trainingFileContents.Count(); i++) examples.Add(trainingFileContents[i]);
-
 
                 var sw = new Stopwatch();
                 sw.Start();
 
-                dataSet = new Data[examples.Count()];
-                for (int i = 0; i < examples.Count(); i++)
-                {
-                    RegexOptions options = RegexOptions.None;
-                    Regex regex = new Regex("[ ]{2,}", options);
-                    string temp = examples[i].Replace("\t", " ");
-                    temp = regex.Replace(temp, " ");
+                dataSet = GenerateDataSet(trainingFileContents, classLabels);
 
-                    string[] dataSplit = temp.Split(' ');
-
-                    if (dataSplit[1].Equals(classLabels[0]))
-                    {
-                        dataSet[i].decision = true;
-                    }
-                    else
-                    {
-                        dataSet[i].decision = false;
-                    }
-
-                    dataSet[i].attributeValues = new string[features.Length];
-
-                    for (int j = 2, attribIndex = 0; j < dataSplit.Length; j++, attribIndex++) dataSet[i].attributeValues[attribIndex] = dataSplit[j];
-
-                }
+                testingSet = GenerateDataSet(testingFileContents, classLabels);
 
                 int positiveCount = dataSet.Where(n => n.decision).Count();
                 int negativeCount = dataSet.Where(n => !n.decision).Count();
@@ -162,12 +131,6 @@ namespace AiAssignment4
                         maxGain = Gain;
                     }
                 }
-
-
-
-
-
-
 
 
                 //  START of TREE creation
@@ -226,7 +189,7 @@ namespace AiAssignment4
                         }
 
 
-                        if (currentLayer!=null && currentLayer.Count() > 50)
+                        if (currentLayer!=null && currentLayer.Count() > treeMaxDepth)
                         {
                             float posRatio = (float)positiveCount / (float)count;
                             if(posRatio < 0.5)
@@ -328,10 +291,20 @@ namespace AiAssignment4
 
                 long elapsedMilliseconds = sw.ElapsedMilliseconds; sw.Stop();
 
-
                 PrintTree(root);
 
-                //Console.WriteLine("ijou desu yo. jikan wa: " + elapsedMilliseconds);
+                int correct = 0;
+                foreach (var set in testingSet)
+                {
+                    if(TraverseTree(root, set.attributeValues) == set.decision)
+                    {
+                        correct++;
+                    }
+                }
+
+
+                Console.WriteLine("\n\nCorrect: " + correct + " out of " + testingSet.Length);
+                Console.WriteLine("finished: " + elapsedMilliseconds);
             }
             catch (Exception e) //exception handling out of scope
             {
@@ -366,7 +339,36 @@ namespace AiAssignment4
                 PrintTree(branch);
             }
 
+        }
 
+
+
+        static bool TraverseTree(Node tree, string[] attributeValues)
+        {
+
+            Node currentNode = tree;
+
+            while (!currentNode.end)
+            {
+
+                if (currentNode.branches != null)
+                {
+                    for (int i = 0; i < tree.branches.Length; i++)
+                    {
+
+                        if (attributeValues.Contains(currentNode.feature.attributes[i]))
+                        {
+
+                            currentNode = currentNode.branches[i];
+                            break;
+                        }
+
+                    }
+                }
+            }
+
+
+            return currentNode.decision;
         }
 
 
@@ -381,6 +383,53 @@ namespace AiAssignment4
             if (float.IsNaN(b)) b = 0;
 
             return a - b;
+        }
+
+        static Data[] GenerateDataSet(List<string> filecontents, string[] classLabels)
+        {
+
+            List<string> examples = new List<string>();
+
+
+            for (int i = 3, k = 0; i < features.Length + 3; i++, k++)   //input file has number of features at index 2, so we start populating features array at index of 3
+            {
+                string[] featureSplit = filecontents[i].Split(' ');
+                features[k].featureName = featureSplit[0];
+                features[k].attributes = new string[featureSplit.Length - 1];
+                features[k].index = k;
+
+                for (int j = 0; j < features[k].attributes.Length; j++) features[k].attributes[j] = featureSplit[j + 1];
+            }
+
+            int exampleCount = int.Parse(filecontents[features.Length + 3]);
+            for (int i = features.Length + 4; i < filecontents.Count(); i++) examples.Add(filecontents[i]);
+
+            Data[] set = new Data[examples.Count()];
+            for (int i = 0; i < examples.Count(); i++)
+            {
+                RegexOptions options = RegexOptions.None;
+                Regex regex = new Regex("[ ]{2,}", options);
+                string temp = examples[i].Replace("\t", " ");
+                temp = regex.Replace(temp, " ");
+
+                string[] dataSplit = temp.Split(' ');
+
+                if (dataSplit[1].Equals(classLabels[0]))
+                {
+                    set[i].decision = true;
+                }
+                else
+                {
+                    set[i].decision = false;
+                }
+
+                set[i].attributeValues = new string[features.Length];
+
+                for (int j = 2, attribIndex = 0; j < dataSplit.Length; j++, attribIndex++) set[i].attributeValues[attribIndex] = dataSplit[j];
+
+            }
+
+            return set;
         }
 
 
